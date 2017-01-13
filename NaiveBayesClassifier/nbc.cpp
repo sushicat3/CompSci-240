@@ -16,48 +16,64 @@ string usName = "US";
 string rusName = "Russian";
 string othName = "Other";
 
-char obs [] = { 'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L', 'M', 
+// set of predictors
+char LETTERS [] = { 'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L', 'M', 
 			    'N', 'O', 'P', 'Q', 'R', 'S', 'T', 'U', 'V', 'W', 'X', 'Y', 'Z'};
 
-int hasLet [26];
+// subset of predictors for each object
+int predictors [26];
 
-int us_llh [26];
-int russia_llh [26];
-int other_llh [26];
+// arrays holding likelihoods* of each predictor for each class: US, RUSSIA, OTHER.
+// *actually holds the number of times a predictor was observed in the city data for each class.
+// *likelihood = llh_class[i] / 100
+int us [26];
+int russia [26];
+int other [26];
 
-void initLlh(int arr[]) {
+void initLlh(int llh[]) {
 	for (int i = 0; i < 26; ++i)
-		arr[i] = 1;
+		llh[i] = 0;
+}
+
+void initAll() {
+	initLlh(us);
+	initLlh(russia);
+	initLlh(other);
 }
 
 //-------------------------------------------------------------
-//  HAS LETTER FUNCTIONS
+//  PREDICTOR FUNCTIONS
 //-------------------------------------------------------------
-void hasLetFcn( string city ) {
+// - records the predictors "observed" for each city name, in the global array predictors[]
+
+void clearPredictors() {
+	for (int i = 0; i < 26; ++i)
+		predictors[i] = 0;
+}
+
+void observe( string city ) {
+	clearPredictors();
 	for (string::iterator it = city.begin(); it!=city.end(); ++it) {
 		for (int i = 0; i < 26; ++i) {
-			if ( (char) *it == obs[i] ) {
-				hasLet[i] = 1;
+			if ( (char) *it == LETTERS[i] ) {
+				predictors[i] = 1;
 			}
 		}
 	}
 }
 
-void clrHasLet() {
-	for (int i = 0; i < 26; ++i)
-		hasLet[i] = 0;
-}
-
 //-------------------------------------------------------------
 //  LIKELIHOOD FUNCTIONS 
 //-------------------------------------------------------------
-void incLlh(int arr[]) {
+//- calculates likelihoods for each predictor for the class of this file. 
+
+void updateLlh(int llh[]) {
 	for (int i = 0; i < 26; ++i) {
-		arr[i] += hasLet[i];
+		llh[i] += predictors[i];
 	}
 }
 
-void llhFcn( int arr[], string filename ) {
+void likelihood( int llh[], string filename ) {
 	
 	ifstream infile;
 
@@ -66,28 +82,29 @@ void llhFcn( int arr[], string filename ) {
     string city;
     	while (infile.good()) {
     		getline(infile, city);
-   	    	hasLetFcn(city);
-			incLlh(arr);
-			clrHasLet();
+   	    	observe(city);
+			updateLlh(llh);
 		}
 
     infile.close();
 }
 
 //-------------------------------------------------------------
-//  POSTERIOR FUNCTION
+//  POSTERIORI FUNCTION
 //-------------------------------------------------------------
-double pstrFcn( string city, int arr[] ) {
+double posteriori( string city, int arr[] ) {
 
 	double prob = 0.5;
 
-	hasLetFcn(city);
+	observe(city);
 	for (int i = 0; i < 26; ++i) {
-		if (hasLet[i] == 1) {
-			prob *= ( (double) arr[i]/126.0 );
+		if (predictors[i] == 1) {
+			prob *= ( (double) arr[i]/100.0 );
+		}
+		else {
+			prob *= (1 - ( (double) arr[i]/100.0 ) );
 		}
 	}
-	clrHasLet();
 
 	return prob;
 }
@@ -104,7 +121,7 @@ void genMAP( string ifn, string ofn, int arrTru[], int arrFal[], string nameTru,
 	bool acc = false;
 	string nameMAP = nameTru;
 	int acc_count = 0;
-
+	int maxlength = 0;
 
     infile.open (ifn.c_str(), ifstream::in);
     outfile.open(ofn.c_str());
@@ -113,8 +130,12 @@ void genMAP( string ifn, string ofn, int arrTru[], int arrFal[], string nameTru,
     	while (infile.good()) {
     		getline(infile, city);
 
-			pstPROB_TRU = pstrFcn(city, arrTru);
-			pstPROB_FAL = pstrFcn(city, arrFal);
+    		if (city.length() > maxlength) {
+    			maxlength = city.length();
+    		}
+
+			pstPROB_TRU = posteriori(city, arrTru);
+			pstPROB_FAL = posteriori(city, arrFal);
 			denom = (pstPROB_TRU + pstPROB_FAL);
 
 			if (pstPROB_TRU > pstPROB_FAL) acc = true;
@@ -141,13 +162,13 @@ void genMAP( string ifn, string ofn, int arrTru[], int arrFal[], string nameTru,
 
 int main() {
 
-	initLlh(us_llh);
-	initLlh(russia_llh);
-	initLlh(other_llh);
+	initAll();
 
-	llhFcn(russia_llh, "russiaCities100.txt");
-	llhFcn(us_llh, "usCities100.txt");
-	llhFcn(other_llh, "otherCities100.txt");
+	// training:
+	likelihood(russia, "russiaCities100.txt");
+	likelihood(us, "usCities100.txt");
+	likelihood(other, "otherCities100.txt");
+	// prior will be 0.5 for each experiment.
 
 	//void genMAP( string ifn, string ofn, int arrTru[], int arrFal[], string nameTru, string nameFal )
 	//
@@ -158,14 +179,14 @@ int main() {
 	// - name of the TRUE class
 	// - name of the FALSE class
 
-	genMAP( "usCitiesNext50.txt", "exp1_USCities.txt", us_llh, russia_llh, usName, rusName);
-	genMAP( "russiaCitiesNext50.txt", "exp1_RussiaCities.txt", russia_llh, us_llh, rusName, usName);
+	genMAP( "usCitiesNext50.txt", "exp1_USCities.txt", us, russia, usName, rusName);
+	genMAP( "russiaCitiesNext50.txt", "exp1_RussiaCities.txt", russia, us, rusName, usName);
 
-	genMAP( "russiaCitiesNext50.txt", "exp2_RussiaCities.txt", russia_llh, other_llh, rusName, othName);
-	genMAP( "otherCitiesNext50.txt", "exp2_OtherCities.txt", other_llh, russia_llh, othName, rusName);
+	genMAP( "russiaCitiesNext50.txt", "exp2_RussiaCities.txt", russia, other, rusName, othName);
+	genMAP( "otherCitiesNext50.txt", "exp2_OtherCities.txt", other, russia, othName, rusName);
 
-	genMAP( "usCitiesNext50.txt", "exp3_USCities.txt", us_llh, other_llh, usName, othName);
-	genMAP( "otherCitiesNext50.txt", "exp3_OtherCities.txt", other_llh, us_llh, othName, usName);
+	genMAP( "usCitiesNext50.txt", "exp3_USCities.txt", us, other, usName, othName);
+	genMAP( "otherCitiesNext50.txt", "exp3_OtherCities.txt", other, us, othName, usName);
 
     return 0;
 }
