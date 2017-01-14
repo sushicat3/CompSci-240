@@ -54,3 +54,39 @@ The algorithm starts with a set of already classified objects. It observes prior
 #### Step 2: Classifying
 
 The algorithm generates the MAP (maximum posteriori) hypothesis for each obejct, and uses it to classify them.
+
+### Implementation Details
+
+In this implementation, the algorithm classifies cities, based on whether or not they contain certain letters.
+
+Inital data given is 3 lists of cities. 1 list of 100 US cities, 1 list of 100 Russian cities, and one list of other cities (cities that are neither US nor Russian)
+	
+	training/
+		usCities100.txt
+		russiaCities100.txt
+		otherCities100.txt
+
+The second set of data is 3 more lists of cities with  "unknown" classifications. 
+	
+	unknown/
+		usCitiesNext50.txt
+		russiaCitiesNext50.txt
+		otherCitiesNext50.txt
+
+We know their classifcations but the algorithm doesn't, and it will try to classify them correctly. Sometimes it will get it wrong, so we will output the **accuracy** of the NBC algorithm's classifications.
+	
+	accuracy % = [correct trials] / [total trials] * 100 %
+
+This implementation will run 3 "Experiments" of the NBC algorithm. 
+
+In the first "Experiment" the algorithm uses the 100 Russian cities and 100 US cities as training data. Then, it classifies the next 50 Russian cities as either US or Russian, and the next 50 US cities as either US or Russian.
+
+The second and third "Experiments" are exactly like the first, but they will use Russian and Other, and Other and US cities, respectively.
+
+What are the predictors? In this implementation they will be the existence of certain letters in the city's name.
+
+There are 26 predictors that make up the set.
+
+	X = {Xa, Xb, ..., Xz}
+
+Basically, if a city contains letters that are similar to letters commonly found in the names of a certain type of city, it will be classified as that type of city.
